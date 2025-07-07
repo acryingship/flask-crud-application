@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <main class="table">
+
+        <!-- Table Title -->
+        <h1 class="table__title">SOH</h1>
+
+        <!-- Inventory Table -->
+        <section class="table__body">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Zone Code</th>
+                        <th>SKU Code</th>
+                        <th>Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>{{ row.zone_code }}</td>
+                        <td>{{ row.sku_code }}</td>
+                        <td>{{ row.quantity - row.out_locked_quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <!-- SKU Form -->
+        <h1 class="table__title">Select SKU</h1>
+        <form class="sku-form" method="POST" action="{{ url_for('submit') }}">
+            <div class="form-row">
+                <div class="custom-multiselect">
+                    <label for="chooseSkus">Sku:</label>
+                    <div class="selected" id="chooseSkus" onclick="toggleDropdown()">Choose SKUs</div>
+                    <div class="options" id="dropdown-options">
+                        {% for sku in skulist %}
+                        <label>
+                            <input type="checkbox" name="sku" value="{{ sku }}">
+                            <span>{{ sku }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <label for="quantity">Quantity:</label>
+                    <select name="quantity" id="quantity" required>
+                        {% for i in range(1, 11) %}
+                            <option value="{{ i }}">{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit">Submit</button>
+            </div>
+        </form>
+
+        <!-- Console Output Box -->
+        {% if result %}
+        <div class="console-box">
+            {{ result }}
+        </div>
+        {% endif %}
+
+    </main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div id="toast-container">
+          {% for category, message in messages %}
+            <div class="toast {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+        <script>
+          // Automatically fade out toast after 4 seconds
+          setTimeout(() => {
+            document.querySelectorAll('.toast').forEach(el => {
+              el.classList.add('fade-out');
+            });
+          }, 4000);
+
+          // Remove from DOM after animation
+          setTimeout(() => {
+            const container = document.getElementById('toast-container');
+            if (container) container.remove();
+          }, 5000);
+        </script>
+      {% endif %}
+    {% endwith %}
+<!-- JS for custom dropdown -->
+    <script>
+    function toggleDropdown() {
+        const dropdown = document.getElementById("dropdown-options");
+        dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+    }
+
+    window.onclick = function(e) {
+        if (!e.target.closest(".custom-multiselect")) {
+            document.getElementById("dropdown-options").style.display = "none";
+        }
+    };
+
+    function gatherSelections() {
+        const checkboxes = document.querySelectorAll('input[name="sku"]:checked');
+        const selected = Array.from(checkboxes).map(cb => cb.value);
+        document.getElementById("sku_hidden").value = selected.join(',');
+        return true;
+    }
+    </script>
+</body>
+</html>
