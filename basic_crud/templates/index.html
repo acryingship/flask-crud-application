@@ -25,9 +25,9 @@
                 <tbody>
                     {% for row in rows %}
                     <tr>
-                        <td>{{ row.zone_code }}</td>
-                        <td>{{ row.sku_code }}</td>
-                        <td>{{ row.quantity - row.out_locked_quantity }}</td>
+                        <td>{{ row[0] }}</td>
+                        <td>{{ row[1] }}</td>
+                        <td>{{ row[4] - row[2] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -39,8 +39,7 @@
         <form class="sku-form" method="POST" action="{{ url_for('submit') }}">
             <div class="form-row">
                 <div class="custom-multiselect-vertical">
-                    <label for="chooseSkus">Sku:</label>
-                    <div class="selected" id="chooseSkus" onclick="toggleDropdown()">Choose SKUs</div>
+                    <label for="dropdown-options">Sku:</label>
                     <div class="options" id="dropdown-options">
                         {% for sku in skulist %}
                         <label>
@@ -95,17 +94,6 @@
     {% endwith %}
 <!-- JS for custom dropdown -->
     <script>
-    function toggleDropdown() {
-    const dropdown = document.getElementById("dropdown-options");
-    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
-    }
-
-    window.onclick = function(e) {
-        if (!e.target.closest(".custom-multiselect-vertical")) {
-            const dropdown = document.getElementById("dropdown-options");
-            if (dropdown) dropdown.style.display = "none";
-        }
-    }
 
     function gatherSelections() {
         const checkboxes = document.querySelectorAll('input[name="sku"]:checked');

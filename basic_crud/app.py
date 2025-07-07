@@ -40,27 +40,41 @@ class Inventory(db.Model):
 
 def index():
     # Get first 50 rows as an example
-    sku_name_dict = {'CeMAT_LEGO': 'LEGO-L', 'CeMAT_LEGO_S': 'LEGO-S','CeMAT_Pen': 'Pen', 'CeMAT_Tote': 'Tote bag',
-                     'CeMAT_Charger': 'Wireless Charger', 'CeMAT_USB': 'USB'}
-    sql = text("""SELECT zone_code,sku_code, out_locked_quantity,in_locked_quantity, quantity FROM evo_wes_inventory.level2_inventory l2 LEFT JOIN evo_wes_basic.basic_sku bs ON l2.sku_id = bs.id;""")
+    sku_name_dict = {'CeMAT_LEGO': 'LEGO-L', 'CeMAT_LEGO_S': 'LEGO-S', 'CeMAT_Pen': 'PEN', 'CeMAT_Tote': 'TOTE BAG',
+                     'CeMAT_Charger': 'WIRELESS CHARGER', 'CeMAT_USB': 'USB'}
+    sql = text("""SELECT zone_code,sku_code, out_locked_quantity,in_locked_quantity, quantity FROM evo_wes_inventory.level2_inventory l2 LEFT JOIN evo_wes_basic.basic_sku bs ON l2.sku_id = bs.id WHERE sku_code LIKE 'CeMAT%';""")
     result = db.session.execute(sql)
     rows = result.fetchall()
     print(rows)
     sku_list = []
     filtered_rows =[row for row in rows if row.quantity>0 and row.zone_code=='AMR']
+    print(filtered_rows)
+    newRows = []
     for row in filtered_rows:
+        zone = row[0]
         sku = row[1]
-        sku_list.append(sku)
+        outlocked = row[2]
+        quantity = row[4]
+        renamedSku = sku_name_dict[sku]
+        sku_list.append(renamedSku)
+        newRow = (zone,renamedSku,outlocked,0,quantity)
+        newRows.append(newRow)
     sku_list = set(sku_list)
+    print(newRows)
+    print(sku_list)
 
-    return render_template("index.html", rows=filtered_rows, skulist = list(sku_list))
+    return render_template("index.html", rows=newRows, skulist = list(sku_list))
 
 
 @app.route('/submit', methods=['POST'])
 def submit():
+    sku_name_dict = {'CeMAT_LEGO': 'LEGO-L', 'CeMAT_LEGO_S': 'LEGO-S', 'CeMAT_Pen': 'PEN', 'CeMAT_Tote': 'TOTE BAG',
+                     'CeMAT_Charger': 'WIRELESS CHARGER', 'CeMAT_USB': 'USB'}
+    invDict = {key:value for value,key in sku_name_dict.items()}
     sku_data =  request.form.getlist('sku')
     print(sku_data)
-    selected_skus =sku_data
+    selected_skus =[invDict[sku] for sku in sku_data]
+    print(selected_skus)
     selected_quantity = int(request.form.get('quantity'))
     bill_date = datetime.now()
     bill_date = bill_date.strftime("%d-%m-%Y %H:%M:%S")
@@ -68,14 +82,15 @@ def submit():
     print(f"{bill_date} \nSKU: {','.join(selected_skus)}, Quantity: {selected_quantity}")
     results_str = f"{bill_date} \nSKU: {selected_skus}, Quantity: {selected_quantity}"
     #pickResults = makePick(selected_sku,selected_quantity)
-    pickResults = makePickMultiLine(selected_skus,selected_quantity)
-    results_str += "\n" + pickResults
-    time.sleep(1)
     if not selected_skus or not selected_quantity:
         flash("Please select SKU and quantity")
-    else:
+    for i in range(selected_quantity):
+        print(i)
+        pickResults = makePickMultiLine(selected_skus,selected_quantity)
+        results_str += "\n" + pickResults
+        time.sleep(1)
         flash(results_str)
-    session['results'] = results_str
+
     return redirect(url_for('index'))
 
 def makePickMultiLine(sku_entry,qt_entry):

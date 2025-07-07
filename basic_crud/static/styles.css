@@ -175,21 +175,11 @@ tbody tr:nth-child(even) {
         transform: translateX(100%);
     }
 }
-.custom-multiselect-vertical {
 
-    position: relative;
-    overflow: visible;
-    gap: 0.5rem;
-    width: 90%;
-    max-width: 400px;
-    margin: 1rem auto;
-    font-family: Barlow, sans-serif;
-    font-size: 1rem;
-    color: #0D4338;
-}
 
 .custom-multiselect-vertical label {
     font-weight: bold;
+    white-space: nowrap;
 }
 
 .custom-multiselect-vertical .selected {
@@ -201,7 +191,7 @@ tbody tr:nth-child(even) {
 }
 
 .custom-multiselect-vertical .options {
-    display: none;
+    display: block;
     max-height: 200px;
     overflow-y: auto;
     background-color: #fff;
@@ -219,7 +209,20 @@ tbody tr:nth-child(even) {
     cursor: pointer;
 }
 
-
+.custom-multiselect-vertical {
+    display: flex;
+    position: relative;
+    overflow: visible;
+    gap: 1rem;
+    width: 90%;
+    max-width: 400px;
+    margin: 1rem auto;
+    font-family: Barlow, sans-serif;
+    font-size: 1rem;
+    color: #0D4338;
+    align-items: center;
+    justify-content: center;
+}
 .custom-multiselect {
     display: flex;
     align-items: center;
