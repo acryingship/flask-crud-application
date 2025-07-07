@@ -1,14 +1,22 @@
-from flask import Flask, render_template, request,redirect
+import time
+import pymysql
+import requests
+import secrets
+from flask import Flask, render_template, request, redirect, json, session, url_for, flash
 from flask_scss import Scss
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
+import uuid
+from sqlalchemy import text
 
 app = Flask(__name__)
+app.secret_key = secrets.token_hex(16)
 Scss(app)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+pymysql://root:root123@172.16.10.200:3306/evo_wes_inventory"
 db = SQLAlchemy(app)
+#app.run(host="0.0.0.0", port=5000)
 
-class Todo(db.Model):
+class Inventory(db.Model):
     """A Model for an Item in the Todo List
 
     Args:
@@ -17,74 +25,216 @@ class Todo(db.Model):
     Returns:
         __repr__: string rep.
     """
+    __tablename__ = 'level2_inventory'
     id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.String(200), nullable=False)
-    completed = db.Column(db.Integer, default=0)
-    date_created = db.Column(db.DateTime, default=datetime.utcnow)
+    zone_code = db.Column(db.String)
+    #sku_code = db.Column(db.String)
+    out_locked_quantity = db.Column(db.Integer)
+    in_locked_quantity = db.Column(db.Integer)
+    quantity = db.Column(db.Integer)
     
     def __repr__(self):
-        return f'<Task {self.id}'
+        return f"<Inventory {self.zone_code}, {self.sku_code}, {self.quantity - self.out_locked_quantity}>"
 
 @app.route('/', methods=["POST","GET"])
+
 def index():
-    """Main page for App
+    # Get first 50 rows as an example
+    sku_name_dict = {'CeMAT_LEGO': 'LEGO-L', 'CeMAT_LEGO_S': 'LEGO-S','CeMAT_Pen': 'Pen', 'CeMAT_Tote': 'Tote bag',
+                     'CeMAT_Charger': 'Wireless Charger', 'CeMAT_USB': 'USB'}
+    sql = text("""SELECT zone_code,sku_code, out_locked_quantity,in_locked_quantity, quantity FROM evo_wes_inventory.level2_inventory l2 LEFT JOIN evo_wes_basic.basic_sku bs ON l2.sku_id = bs.id;""")
+    result = db.session.execute(sql)
+    rows = result.fetchall()
+    print(rows)
+    sku_list = []
+    filtered_rows =[row for row in rows if row.quantity>0 and row.zone_code=='AMR']
+    for row in filtered_rows:
+        sku = row[1]
+        sku_list.append(sku)
+    sku_list = set(sku_list)
 
-    Returns:
-        page: home page
-    """
-    if request.method == "POST":
-        task_content = request.form['content']
-        new_task = Todo(content=task_content)
-        try:
-            db.session.add(new_task)
-            db.session.commit()
-            return redirect("/")
-        except Exception as e:
-            print(f"Error:{e}")
-            return f'Error:{e}'
+    return render_template("index.html", rows=filtered_rows, skulist = list(sku_list))
+
+
+@app.route('/submit', methods=['POST'])
+def submit():
+    sku_data =  request.form.getlist('sku')
+    print(sku_data)
+    selected_skus =sku_data
+    selected_quantity = int(request.form.get('quantity'))
+    bill_date = datetime.now()
+    bill_date = bill_date.strftime("%d-%m-%Y %H:%M:%S")
+    # Example: just print it or use it in logic
+    print(f"{bill_date} \nSKU: {','.join(selected_skus)}, Quantity: {selected_quantity}")
+    results_str = f"{bill_date} \nSKU: {selected_skus}, Quantity: {selected_quantity}"
+    #pickResults = makePick(selected_sku,selected_quantity)
+    pickResults = makePickMultiLine(selected_skus,selected_quantity)
+    results_str += "\n" + pickResults
+    time.sleep(1)
+    if not selected_skus or not selected_quantity:
+        flash("Please select SKU and quantity")
     else:
-        tasks = Todo.query.order_by(Todo.date_created).all()
-        return render_template('index.html',tasks=tasks)
+        flash(results_str)
+    session['results'] = results_str
+    return redirect(url_for('index'))
 
-@app.route("/delete/<int:id>")
-def delete(id):
-    """delete an item from the todo list
+def makePickMultiLine(sku_entry,qt_entry):
+    url = 'http://172.16.10.200:10080/api/v2/quicktron/wes/picking-order/create'
 
-    Args:
-        id (int): uuid for each item in the todo list
+    # Get user input for the number of requests, SKU codes and their quantities
+    bill_type = 'SMALL'
+    sku_code = sku_entry
+    sku_quant = int(qt_entry)
 
-    Returns:
-        redirect: delete and return to home
-    """
-    task_to_delete = Todo.query.get_or_404(id)
-    try:
-        db.session.delete(task_to_delete)
-        db.session.commit()  
-        return redirect("/")
-    except Exception as e:
-        return f"Error:{e}"
+    # bill_type = "MEDIUM"
+    bill_header = "fOUT-" + bill_type  # user-defined bill header""
+    # Check if the number of SKUs and quantities match
 
-@app.route("/update/<int:id>", methods=["GET","POST"])
-def update(id):
-    """update an item from the todo list
+    # Define the headers
+    headers = {
+        "appKey": "0123456789abcdef",
+        "appSecret": "0123456789abcdef",
+        "requestId": str(int(time.time())),
+        "timestamp": str(int(time.time())),
+        "version": "2.7",
+        "Content-Type": "application/json"
+    }
+    start_time = time.time()
+    # Send the POST request for a user defined number of times
 
-    Args:
-        id (int): uuid for each item in the todo list
+    bill_date = datetime.now()
+    ship_deadline = bill_date + timedelta(hours=5)
+    order_id = uuid.uuid4().int
 
-    Returns:
-        redirect: update and return to home
-    """
-    task = Todo.query.get_or_404(id)
-    if request.method == "POST":
-        task.content = request.form['content']
-        try:
-            db.session.commit()
-            return redirect("/")
-        except Exception as e:
-            print(f"ERROR:{e}")
-            return "Error"
-    else:
-        return render_template("update.html", task=task)
+    # Create a dictionary for each SKU in the "details" list
+    details = []
+    detail_id = 0
+
+    for sku_code in sku_entry:
+        detail_id += 1
+        sku_code = sku_code.strip()  # Remove any leading/trailing whitespace
+        details.append({
+            "id": str(order_id + detail_id),
+            "ownerCode": "1",
+            "skuCode": sku_code,  # user-defined SKU code
+            "quantity": 1,  # user-defined quantity
+            "lotAtt01": None,
+            "lotAtt02": None,
+            "lotAtt03": None
+        })
+
+    payload = {
+        "transactional": True,
+        "warehouseCode": "TTC_demo",
+        "data": [
+            {
+                "id": str(order_id),  # unique id
+                "billNumber": bill_header + bill_date.strftime("%d-%m-%Y %H:%M:%S"),  # unique billNumber
+                "ownerCode": "1",  # constant ownerCode
+                "billType": bill_type,  # user-defined billType
+                "billDate": bill_date.strftime("%d-%m-%Y %H:%M:%S"),  # unique billDate
+                "priorityType": "COMMON",
+                "priorityValue": 1,
+                "shipDeadline": ship_deadline.strftime("%d-%m-%Y %H:%M:%S"),  # billDate + 5 hours
+                # "udf1": "",
+                "remark": "",
+                "details": details
+            }
+        ]
+    }
+
+    # Convert dict to json string
+    data = json.dumps(payload)
+    print(data)
+    response = requests.post(url, headers=headers, data=data)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(
+        f"Application sent 1 requests, in {elapsed_time} seconds\n Average time per request: {elapsed_time / 1} seconds.")
+    # Print the response
+    print(response.text)
+    time.sleep(1)
+    return response.text
+
+
+def makePick(sku_entry,qt_entry):
+    # Define the URL
+    url = 'http://172.16.10.200:10080/api/v2/quicktron/wes/picking-order/create'
+
+    # Get user input for the number of requests, SKU codes and their quantities
+    bill_type = 'SMALL'
+    sku_code = sku_entry
+    sku_quant = int(qt_entry)
+
+    #bill_type = "MEDIUM"
+    bill_header = "fOUT-" + bill_type  # user-defined bill header""
+    # Check if the number of SKUs and quantities match
+
+    # Define the headers
+    headers = {
+        "appKey": "0123456789abcdef",
+        "appSecret": "0123456789abcdef",
+        "requestId": str(int(time.time())),
+        "timestamp": str(int(time.time())),
+        "version": "2.7",
+        "Content-Type": "application/json"
+    }
+    start_time = time.time()
+    # Send the POST request for a user defined number of times
+
+
+    bill_date = datetime.now()
+    ship_deadline = bill_date + timedelta(hours=5)
+    order_id = uuid.uuid4().int
+
+    # Create a dictionary for each SKU in the "details" list
+    details = []
+    detail_id=0
+
+    sku_code = sku_code.strip()  # Remove any leading/trailing whitespace
+    details.append({
+        "id": str(order_id+detail_id),
+        "ownerCode": "1",
+        "skuCode": sku_code,  # user-defined SKU code
+        "quantity": sku_quant,  # user-defined quantity
+        "lotAtt01": None,
+        "lotAtt02": None,
+        "lotAtt03": None
+    })
+
+    payload = {
+        "transactional": True,
+        "warehouseCode": "TTC_demo",
+        "data": [
+            {
+                "id": str(order_id),  # unique id
+                "billNumber": bill_header + bill_date.strftime("%d-%m-%Y %H:%M:%S"),  # unique billNumber
+                "ownerCode": "1",  # constant ownerCode
+                "billType": bill_type,  # user-defined billType
+                "billDate": bill_date.strftime("%d-%m-%Y %H:%M:%S"),  # unique billDate
+                "priorityType": "COMMON",
+                "priorityValue": 1,
+                "shipDeadline": ship_deadline.strftime("%d-%m-%Y %H:%M:%S"),  # billDate + 5 hours
+                #"udf1": "",
+                "remark": "",
+                "details": details
+            }
+        ]
+    }
+
+    # Convert dict to json string
+    data = json.dumps(payload)
+    print(data)
+    response = requests.post(url, headers=headers, data=data)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(f"Application sent 1 requests, in {elapsed_time} seconds\n Average time per request: {elapsed_time/1} seconds.")
+        # Print the response
+    print(response.text)
+    time.sleep(1)
+    return response.text
 
 if __name__ in "__main__":
     with app.app_context():
