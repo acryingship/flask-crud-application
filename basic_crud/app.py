@@ -41,7 +41,8 @@ class Inventory(db.Model):
 def index():
     # Get first 50 rows as an example
     sku_name_dict = {'CeMAT_LEGO': 'LEGO-L', 'CeMAT_LEGO_S': 'LEGO-S', 'CeMAT_Pen': 'PEN', 'CeMAT_Tote': 'TOTE BAG',
-                     'CeMAT_Charger': 'WIRELESS CHARGER', 'CeMAT_USB': 'USB'}
+                     'CeMAT_Charger': 'WIRELESS CHARGER', 'CeMAT_USB': 'USB', 'CeMAT_Brochure': 'BROCHURE',
+                         'CeMAT_Water': 'WATER'}
     sql = text("""SELECT zone_code,sku_code, out_locked_quantity,in_locked_quantity, quantity FROM evo_wes_inventory.level2_inventory l2 LEFT JOIN evo_wes_basic.basic_sku bs ON l2.sku_id = bs.id WHERE sku_code LIKE 'CeMAT%';""")
     result = db.session.execute(sql)
     rows = result.fetchall()
@@ -69,7 +70,7 @@ def index():
 @app.route('/submit', methods=['POST'])
 def submit():
     sku_name_dict = {'CeMAT_LEGO': 'LEGO-L', 'CeMAT_LEGO_S': 'LEGO-S', 'CeMAT_Pen': 'PEN', 'CeMAT_Tote': 'TOTE BAG',
-                     'CeMAT_Charger': 'WIRELESS CHARGER', 'CeMAT_USB': 'USB'}
+                     'CeMAT_Charger': 'WIRELESS CHARGER', 'CeMAT_USB': 'USB' , 'CeMAT_Brochure': 'BROCHURE', 'CeMAT_Water':'WATER'}
     invDict = {key:value for value,key in sku_name_dict.items()}
     sku_data =  request.form.getlist('sku')
     print(sku_data)
